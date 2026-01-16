@@ -1,0 +1,91 @@
+body {
+    background-color: #f1f3f5;
+}
+
+/* ===== wrapper หลัก ===== */
+.login-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 1200px;
+    min-height: 650px;
+    background: #ffffff;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+/* ===== ฝั่งซ้าย ===== */
+.login-left-container {
+    height: 100%;
+}
+
+/* ===== ฟอร์ม ===== */
+.login-form {
+    margin-top: 180px;
+    width: 100%;
+    max-width: 360px;
+}
+
+.form-control {
+    border-radius: 6px;
+    padding: 12px;
+}
+
+/* ===== โลโก้มุมบนซ้าย ===== */
+.brand-top-left {
+    position: absolute;
+    top: 32px;
+    left: 48px;
+
+    display: flex;
+    align-items: center;
+    gap: 20px;
+
+    z-index: 10;
+}
+
+.brand-top-left img {
+    width: 100px;
+    height: auto;
+}
+
+.brand-line {
+    display: block;      /* ขึ้นบรรทัดใหม่ */
+    line-height: 1.2;
+}
+
+.brand-line-main {
+    font-size: 28px;     /* บรรทัดบน */
+    font-weight: 700;
+    color: #2CA9E1;
+}
+
+.brand-line-sub {
+    font-size: 14px;     /* บรรทัดล่าง */
+    font-weight: 500;
+    color: #6c757d;
+}
+
+.btn-signin {
+    background-color: #41A475; /* สีหลักของระบบ */
+    color: #fff;
+    border: none;
+}
+
+.btn-signin:hover {
+    background-color: #056f00;
+    color: #fff;
+    border: none;
+}
+
+.left-center-image {
+    width: clamp(200px, 30vw, 380px); /* responsive */
+    height: auto;
+}
+
+.left-center-image {
+    margin-top: 220px;
+}
+
+.alert {
+    font-size: 20px;
+}
