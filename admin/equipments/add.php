@@ -17,36 +17,34 @@ $catResult = mysqli_query(
 /* ===== บันทึกข้อมูล ===== */
 if (isset($_POST['save'])) {
 
-    $category_id = $_POST['category_id'];
-    $name        = $_POST['name'];
-    $model       = $_POST['model'];
-    $price       = $_POST['price'];       // ราคาต่อเครื่อง
-    $total_qty   = $_POST['total_qty'];   // จำนวนทั้งหมด
-    $status      = $_POST['status'];
-    $note        = $_POST['note'] ?? null;
+    $category_id = (int)$_POST['category_id'];
+    $name  = trim($_POST['name']);
+    $model = trim($_POST['model']);
+    $status = (int)$_POST['status'];
+    $note   = trim($_POST['note'] ?? '');
 
-    // จำนวนพร้อมใช้งาน = จำนวนทั้งหมด (ตอนเพิ่มใหม่)
-    $available_qty = $total_qty;
-
-    /* ===== รูปกลุ่ม ===== */
+    /* ===== รูปรวมของรุ่น ===== */
     $image_name = null;
     if (!empty($_FILES['image']['name'])) {
-        $ext = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-        $image_name = 'eq_group_' . time() . '.' . $ext;
+        $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+        $allowed = ['jpg', 'jpeg', 'png', 'webp'];
 
-        move_uploaded_file(
-            $_FILES['image']['tmp_name'],
-            '../../assets/uploads/equipments/' . $image_name
-        );
+        if (in_array($ext, $allowed)) {
+            $image_name = 'eq_' . time() . '.' . $ext;
+            move_uploaded_file(
+                $_FILES['image']['tmp_name'],
+                '../../assets/uploads/equipments/' . $image_name
+            );
+        }
     }
 
-    /* ===== Insert ===== */
-    $sql = "INSERT INTO equipments
-        (category_id, name, model, price,
-         total_qty, available_qty, status, image, note)
+    /* ===== Insert รุ่นอุปกรณ์ ===== */
+    $sql = "
+        INSERT INTO equipments
+            (category_id, name, model, status, image, note)
         VALUES
-        ('$category_id', '$name', '$model', '$price',
-         '$total_qty', '$available_qty', '$status', '$image_name', '$note')";
+            ('$category_id', '$name', '$model', '$status', '$image_name', '$note')
+    ";
 
     mysqli_query($conn, $sql);
 
@@ -63,7 +61,7 @@ if (isset($_POST['save'])) {
 </head>
 <body>
 
-<h2>เพิ่มอุปกรณ์</h2>
+<h2>เพิ่มอุปกรณ์ (ระดับรุ่น)</h2>
 
 <form method="post" enctype="multipart/form-data">
 
@@ -71,7 +69,7 @@ if (isset($_POST['save'])) {
     <select name="category_id" required>
         <option value="">-- เลือกกลุ่มประเภท --</option>
         <?php while ($c = mysqli_fetch_assoc($catResult)) : ?>
-            <option value="<?= $c['id']; ?>">
+            <option value="<?= (int)$c['id']; ?>">
                 <?= htmlspecialchars($c['type_name']); ?> - <?= htmlspecialchars($c['brand']); ?>
             </option>
         <?php endwhile; ?>
@@ -89,33 +87,23 @@ if (isset($_POST['save'])) {
 
     <br><br>
 
-    <label>ราคาต่อเครื่อง (บาท)</label><br>
-    <input type="number" name="price" step="0.01" min="0" required>
-
-    <br><br>
-
-    <label>จำนวนอุปกรณ์ทั้งหมด</label><br>
-    <input type="number" name="total_qty" min="1" value="1" required>
-
-    <br><br>
-
-    <label>สถานะเริ่มต้นของกลุ่ม</label><br>
+    <label>สถานะเริ่มต้นของรุ่น</label><br>
     <select name="status" required>
-        <option value="1">พร้อมใช้งาน</option>
-        <option value="2">ชำรุด</option>
-        <option value="0">จำหน่าย</option>
+        <option value="1">ใช้งานได้</option>
+        <option value="2">งดใช้งาน</option>
+        <option value="0">เลิกใช้</option>
     </select>
 
     <br><br>
 
-    <label>หมายเหตุ (ระดับกลุ่ม)</label><br>
+    <label>หมายเหตุ (ระดับรุ่น)</label><br>
     <textarea name="note" rows="3"
-              placeholder="เช่น ใช้เฉพาะแผนก IT / รุ่นเก่าหยุดจัดซื้อ"></textarea>
+        placeholder="เช่น ใช้เฉพาะแผนก IT / รุ่นเก่าหยุดจัดซื้อ"></textarea>
 
     <br><br>
 
-    <label>รูปรวมของกลุ่มอุปกรณ์</label><br>
-    <input type="file" name="image">
+    <label>รูปรวมของรุ่นอุปกรณ์</label><br>
+    <input type="file" name="image" accept="image/*">
 
     <br><br>
 

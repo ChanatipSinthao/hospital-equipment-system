@@ -2,31 +2,49 @@
 include '../../includes/admin_guard.php';
 include '../../config/db.php';
 
+/* ===== รับค่าค้นหา ===== */
+$q = trim($_GET['q'] ?? '');
+$where = '';
+
+if ($q !== '') {
+    $q_safe = mysqli_real_escape_string($conn, $q);
+    $where = "
+        WHERE
+            e.name LIKE '%$q_safe%' OR
+            e.model LIKE '%$q_safe%' OR
+            t.name LIKE '%$q_safe%' OR
+            c.brand LIKE '%$q_safe%'
+    ";
+}
+
 /* ===== ดึงรายการอุปกรณ์ ===== */
 $sql = "
-SELECT 
+SELECT
     e.id,
     e.name,
     e.model,
     e.image,
-    e.price,
-    e.total_qty,
-    e.available_qty,
     e.status,
     e.note,
     e.created_at,
 
+    c.brand,
     t.name AS type_name,
-    c.brand
+
+    COUNT(ei.id) AS total_qty,
+    SUM(CASE WHEN ei.status = 1 THEN 1 ELSE 0 END) AS available_qty,
+    COALESCE(SUM(ei.price), 0) AS total_price
 
 FROM equipments e
+LEFT JOIN equipment_items ei ON ei.equipment_id = e.id
 LEFT JOIN equipment_categories c ON e.category_id = c.id
 LEFT JOIN equipment_types t ON c.type_id = t.id
+
+$where
+
+GROUP BY e.id
 ORDER BY e.id DESC
 ";
-
-
-
 
 $result = mysqli_query($conn, $sql);
 
@@ -41,6 +59,7 @@ function equipmentStatus(int $status): string {
 }
 ?>
 
+
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -52,7 +71,18 @@ function equipmentStatus(int $status): string {
 <h2>รายการอุปกรณ์</h2>
 
 <a href="add.php">➕ เพิ่มอุปกรณ์</a>
-<a href="../categories/index.php">📂 จัดการกลุ่มอุปกรณ์</a
+<a href="../categories/index.php">📂 จัดการกลุ่มอุปกรณ์</a>
+
+<form method="get">
+    <input type="text"
+           name="q"
+           placeholder="ค้นหา ชื่อ / รุ่น / ประเภท / ยี่ห้อ"
+           value="<?= htmlspecialchars($_GET['q'] ?? ''); ?>">
+    <button type="submit">🔍 ค้นหา</button>
+    <a href="index.php">ล้าง</a>
+</form>
+
+<br>
 
 <br><br>
 
@@ -64,6 +94,7 @@ function equipmentStatus(int $status): string {
     <th>จำนวน</th>
     <th>หมายเหตุ</th>
     <th>ราคารวม</th>
+    <th>วันที่เพิ่ม</th>
     <th>จัดการ</th>
 </tr>
 
@@ -107,7 +138,11 @@ function equipmentStatus(int $status): string {
 
     <!-- ราคารวม -->
     <td align="right">
-        <?= number_format($row['price'] * $row['total_qty'], 2); ?> บาท
+        <?= number_format((float)$row['total_price'], 2); ?> บาท
+    </td>
+
+    <td align="center">
+    <?= date('d/m/Y', strtotime($row['created_at'])); ?>
     </td>
 
     <!-- จัดการ -->
