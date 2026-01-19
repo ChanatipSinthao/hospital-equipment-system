@@ -2,20 +2,47 @@
 include '../../includes/admin_guard.php';
 include '../../config/db.php';
 
+$type_id     = (int)($_GET['type_id'] ?? 0);
+if ($type_id > 0) {
+    $where[] = "t.id = $type_id";
+}
+
+$category_id = (int)($_GET['category_id'] ?? 0);
+if ($category_id > 0) {
+    $where[] = "e.category_id = $category_id";
+}
+
 /* ===== รับค่าค้นหา ===== */
 $q = trim($_GET['q'] ?? '');
-$where = '';
-
 if ($q !== '') {
     $q_safe = mysqli_real_escape_string($conn, $q);
-    $where = "
-        WHERE
-            e.name LIKE '%$q_safe%' OR
-            e.model LIKE '%$q_safe%' OR
-            t.name LIKE '%$q_safe%' OR
-            c.brand LIKE '%$q_safe%'
-    ";
+    $where[] = "(
+        e.name LIKE '%$q_safe%' OR
+        e.model LIKE '%$q_safe%' OR
+        t.name LIKE '%$q_safe%' OR
+        c.brand LIKE '%$q_safe%'
+    )";
 }
+
+$date_from = $_GET['date_from'] ?? '';
+if ($date_from !== '') {
+    $where[] = "DATE(e.created_at) >= '" . mysqli_real_escape_string($conn, $date_from) . "'";
+}
+
+$date_to = $_GET['date_to'] ?? '';
+if ($date_to !== '') {
+    $where[] = "DATE(e.created_at) <= '" . mysqli_real_escape_string($conn, $date_to) . "'";
+}
+
+$where_sql = '';
+if (!empty($where)) {
+    $where_sql = 'WHERE ' . implode(' AND ', $where);
+}
+
+$params = [];
+if (!empty($_GET['type_id'])) $params[] = 'type_id='.(int)$_GET['type_id'];
+if (!empty($_GET['category_id'])) $params[] = 'category_id='.(int)$_GET['category_id'];
+$query = !empty($params) ? '?'.implode('&', $params) : '';
 
 /* ===== ดึงรายการอุปกรณ์ ===== */
 $sql = "
@@ -36,15 +63,16 @@ SELECT
     COALESCE(SUM(ei.price), 0) AS total_price
 
 FROM equipments e
-LEFT JOIN equipment_items ei ON ei.equipment_id = e.id
 LEFT JOIN equipment_categories c ON e.category_id = c.id
 LEFT JOIN equipment_types t ON c.type_id = t.id
+LEFT JOIN equipment_items ei ON ei.equipment_id = e.id
 
-$where
+$where_sql
 
 GROUP BY e.id
 ORDER BY e.id DESC
 ";
+
 
 $result = mysqli_query($conn, $sql);
 
@@ -70,19 +98,31 @@ function equipmentStatus(int $status): string {
 
 <h2>รายการอุปกรณ์</h2>
 
-<a href="add.php">➕ เพิ่มอุปกรณ์</a>
+<a href="add.php<?= $query; ?>">➕ เพิ่มอุปกรณ์</a>
 <a href="../categories/index.php">📂 จัดการกลุ่มอุปกรณ์</a>
 
 <form method="get">
+
     <input type="text"
            name="q"
            placeholder="ค้นหา ชื่อ / รุ่น / ประเภท / ยี่ห้อ"
            value="<?= htmlspecialchars($_GET['q'] ?? ''); ?>">
+
+    วันที่เพิ่ม:
+    <input type="date" name="date_from"
+           value="<?= htmlspecialchars($_GET['date_from'] ?? ''); ?>">
+
+    ถึง
+    <input type="date" name="date_to"
+           value="<?= htmlspecialchars($_GET['date_to'] ?? ''); ?>">
+
     <button type="submit">🔍 ค้นหา</button>
     <a href="index.php">ล้าง</a>
+
 </form>
 
 <br>
+
 
 <br><br>
 

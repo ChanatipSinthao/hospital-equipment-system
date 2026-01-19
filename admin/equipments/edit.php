@@ -8,12 +8,15 @@ if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
 }
 
 $id = (int)$_GET['id'];
+$type_id     = (int)($_GET['type_id'] ?? 0);
+$category_id = (int)($_GET['category_id'] ?? 0);
 
-/* ===== ดึงข้อมูลอุปกรณ์ ===== */
+/* ===== ดึงข้อมูลอุปกรณ์ + ประเภท ===== */
 $result = mysqli_query($conn, "
 SELECT
     e.*,
-    c.id AS category_id
+    c.id AS category_id,
+    c.type_id
 FROM equipments e
 LEFT JOIN equipment_categories c ON e.category_id = c.id
 WHERE e.id = $id
@@ -25,24 +28,22 @@ if (!$equipment) {
     die('ไม่พบข้อมูลอุปกรณ์');
 }
 
-/* ===== ดึงกลุ่มประเภท ===== */
-$catResult = mysqli_query(
+/* ===== ดึงประเภท ===== */
+$typeResult = mysqli_query(
     $conn,
-    "SELECT 
-        c.id,
-        t.name AS type_name,
-        c.brand
-     FROM equipment_categories c
-     JOIN equipment_types t ON c.type_id = t.id
-     ORDER BY t.name, c.brand"
+    "SELECT id, name FROM equipment_types ORDER BY name"
 );
 
 /* ===== บันทึกการแก้ไข ===== */
 if (isset($_POST['save'])) {
 
-    $category_id = (int)$_POST['category_id'];
-    $name  = trim($_POST['name']);
-    $model = trim($_POST['model']);
+    $category_id = (int)($_POST['category_id'] ?? 0);
+    if ($category_id === 0) {
+        $category_id = null;
+    }
+
+    $name   = trim($_POST['name']);
+    $model  = trim($_POST['model']);
     $status = (int)$_POST['status'];
     $note   = trim($_POST['note'] ?? '');
 
@@ -60,7 +61,6 @@ if (isset($_POST['save'])) {
                 '../../assets/uploads/equipments/' . $image_name
             );
 
-            // ลบรูปเก่า
             if (!empty($equipment['image']) &&
                 file_exists('../../assets/uploads/equipments/' . $equipment['image'])) {
                 unlink('../../assets/uploads/equipments/' . $equipment['image']);
@@ -68,10 +68,10 @@ if (isset($_POST['save'])) {
         }
     }
 
-    /* ===== UPDATE รุ่นอุปกรณ์ ===== */
+    /* ===== UPDATE ===== */
     $sql = "
         UPDATE equipments SET
-            category_id = '$category_id',
+            category_id = " . ($category_id ? "'$category_id'" : "NULL") . ",
             name        = '$name',
             model       = '$model',
             status      = '$status',
@@ -82,8 +82,23 @@ if (isset($_POST['save'])) {
 
     mysqli_query($conn, $sql);
 
-    header("Location: index.php");
+    $redirect = "index.php";
+
+    $query = [];
+    if ($type_id > 0) {
+        $query[] = "type_id=$type_id";
+    }
+    if ($category_id > 0) {
+        $query[] = "category_id=$category_id";
+    }
+
+    if (!empty($query)) {
+        $redirect .= '?' . implode('&', $query);
+    }
+
+    header("Location: $redirect");
     exit;
+
 }
 ?>
 
@@ -99,14 +114,22 @@ if (isset($_POST['save'])) {
 
 <form method="post" enctype="multipart/form-data">
 
-    <label>กลุ่มประเภทอุปกรณ์</label><br>
-    <select name="category_id" required>
-        <?php while ($c = mysqli_fetch_assoc($catResult)) : ?>
-            <option value="<?= (int)$c['id']; ?>"
-                <?= $equipment['category_id'] == $c['id'] ? 'selected' : ''; ?>>
-                <?= htmlspecialchars($c['type_name']); ?> - <?= htmlspecialchars($c['brand']); ?>
+    <label>ประเภทอุปกรณ์</label><br>
+    <select id="type_id" name="type_id" required>
+        <option value="">-- เลือกประเภท --</option>
+        <?php while ($t = mysqli_fetch_assoc($typeResult)) : ?>
+            <option value="<?= (int)$t['id']; ?>"
+                <?= $equipment['type_id'] == $t['id'] ? 'selected' : ''; ?>>
+                <?= htmlspecialchars($t['name']); ?>
             </option>
         <?php endwhile; ?>
+    </select>
+
+    <br><br>
+
+    <label>ยี่ห้อ</label><br>
+    <select id="category_id" name="category_id" required>
+        <option value="">กำลังโหลด...</option>
     </select>
 
     <br><br>
@@ -140,7 +163,7 @@ if (isset($_POST['save'])) {
     <label>รูปรวมของรุ่นอุปกรณ์</label><br>
     <?php if (!empty($equipment['image'])) : ?>
         <img src="/asset_management/assets/uploads/equipments/<?= htmlspecialchars($equipment['image']); ?>"
-             width="100" style="object-fit:cover;"><br>
+             width="100"><br>
     <?php endif; ?>
     <input type="file" name="image" accept="image/*">
 
@@ -150,6 +173,31 @@ if (isset($_POST['save'])) {
     <a href="index.php">ยกเลิก</a>
 
 </form>
+
+<script>
+const typeSelect = document.getElementById('type_id');
+const catSelect  = document.getElementById('category_id');
+
+function loadCategories(typeId, selectedId = null) {
+    fetch('get_categories.php?type_id=' + typeId)
+        .then(res => res.text())
+        .then(html => {
+            catSelect.innerHTML = html;
+            if (selectedId) {
+                catSelect.value = selectedId;
+            }
+        });
+}
+
+// preload ตอนเปิดหน้า
+if (typeSelect.value) {
+    loadCategories(typeSelect.value, '<?= (int)($equipment['category_id'] ?? 0); ?>');
+}
+
+typeSelect.addEventListener('change', function () {
+    loadCategories(this.value);
+});
+</script>
 
 </body>
 </html>

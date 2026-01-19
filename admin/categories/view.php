@@ -2,156 +2,121 @@
 include '../../includes/admin_guard.php';
 include '../../config/db.php';
 
-/* ===== ตรวจ id กลุ่มประเภท ===== */
-if (!isset($_GET['id'])) {
+/* ===== ตรวจ type_id ===== */
+if (!isset($_GET['type_id']) || !is_numeric($_GET['type_id'])) {
     header("Location: index.php");
     exit;
 }
 
-$category_id = (int)$_GET['id'];
+$type_id = (int)$_GET['type_id'];
 
-/* ===== ดึงข้อมูลกลุ่มประเภท ===== */
-$catResult = mysqli_query(
-    $conn,
-    "SELECT 
-        c.id,
-        c.brand,
-        c.image,
-        t.name AS type_name
-     FROM equipment_categories c
-     JOIN equipment_types t ON c.type_id = t.id
-     WHERE c.id = $category_id"
-);
+/* ===== ข้อมูลประเภท ===== */
+$typeResult = mysqli_query($conn, "
+SELECT id, name, created_at
+FROM equipment_types
+WHERE id = $type_id
+LIMIT 1
+");
 
-$category = mysqli_fetch_assoc($catResult);
-
-if (!$category) {
+$type = mysqli_fetch_assoc($typeResult);
+if (!$type) {
     header("Location: index.php");
     exit;
 }
 
-/* ===== ดึงอุปกรณ์ในกลุ่มนี้ ===== */
-$equipResult = mysqli_query(
-    $conn,
-    "SELECT
-        e.id,
-        e.asset_code,
-        e.name,
-        e.model,
-        e.image,
-        e.price,
-        e.total_qty,
-        e.available_qty,
-        e.status,
-        e.created_at
-     FROM equipments e
-     WHERE e.category_id = $category_id
-     ORDER BY e.id DESC"
-);
+/* ===== ยี่ห้อในประเภทนี้ ===== */
+$result = mysqli_query($conn, "
+SELECT
+    c.id AS brand_id,
+    c.brand,
+    c.created_at,
 
-/* ===== แปลงสถานะ ===== */
-function equipmentStatus(int $status): string {
-    return match ($status) {
-        1 => 'พร้อมใช้งาน',
-        2 => 'ชำรุด',
-        0 => 'จำหน่าย',
-        default => '-',
-    };
-}
+    COUNT(ei.id) AS total_qty,
+    SUM(CASE WHEN ei.status = 1 THEN 1 ELSE 0 END) AS available_qty,
+    COALESCE(SUM(ei.price), 0) AS total_price
+
+FROM equipment_categories c
+LEFT JOIN equipments e ON e.category_id = c.id
+LEFT JOIN equipment_items ei ON ei.equipment_id = e.id
+WHERE c.type_id = $type_id
+GROUP BY c.id
+ORDER BY c.brand
+");
 ?>
 
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>อุปกรณ์ในกลุ่มประเภท</title>
+    <title>ยี่ห้ออุปกรณ์ในประเภท <?= htmlspecialchars($type['name']); ?></title>
 </head>
 <body>
 
-<h2>อุปกรณ์ในกลุ่มประเภท</h2>
+<h2>ยี่ห้ออุปกรณ์</h2>
 
 <p>
-    <strong>ประเภท:</strong> <?= htmlspecialchars($category['type_name']); ?><br>
-    <strong>ยี่ห้อ:</strong> <?= htmlspecialchars($category['brand']); ?>
+    <strong>ประเภท:</strong> <?= htmlspecialchars($type['name']); ?><br>
+    <strong>วันที่เพิ่มประเภท:</strong>
+    <?= date('d/m/Y', strtotime($type['created_at'])); ?>
 </p>
 
-<a href="../equipments/add.php">➕ เพิ่มอุปกรณ์</a> |
+<a href="../brand/add.php?type_id=<?= (int)$type_id; ?>">➕ เพิ่มยี่ห้อ</a> |
 <a href="index.php">⬅ กลับหน้ากลุ่มประเภท</a>
 
 <br><br>
 
 <table border="1" cellpadding="10" width="100%">
-    <tr>
-        <th>ID</th>
-        <th>รูป</th>
-        <th>รายละเอียดอุปกรณ์</th>
-        <th>วันที่เพิ่ม</th>
-        <th>จำนวน</th>
-        <th>สถานะ</th>
-        <th>ราคา</th>
-        <th>จัดการ</th>
-    </tr>
+<tr>
+    <th>ID</th>
+    <th>ยี่ห้อ</th>
+    <th>วันที่เพิ่มยี่ห้อ</th>
+    <th>จำนวนอุปกรณ์</th>
+    <th>ราคารวม</th>
+    <th>จัดการ</th>
+</tr>
 
-    <?php if (mysqli_num_rows($equipResult) === 0) : ?>
-        <tr>
-            <td colspan="8" align="center" style="color:red;">
-                ยังไม่มีอุปกรณ์ในกลุ่มประเภทนี้
-            </td>
-        </tr>
-    <?php endif; ?>
+<?php if (mysqli_num_rows($result) === 0): ?>
+<tr>
+    <td colspan="6" align="center" style="color:red;">
+        ยังไม่มียี่ห้อในประเภทนี้
+    </td>
+</tr>
+<?php endif; ?>
 
-    <?php while ($row = mysqli_fetch_assoc($equipResult)) : ?>
-    <tr>
+<?php while ($row = mysqli_fetch_assoc($result)) : ?>
+<tr>
 
-        <!-- ID -->
-        <td><?= $row['id']; ?></td>
+    <td align="center"><?= (int)$row['brand_id']; ?></td>
 
-        <!-- รูป -->
-        <td align="center">
-            <?php if (!empty($row['image'])) : ?>
-                <img src="/asset_management/assets/uploads/equipments/<?= $row['image']; ?>"
-                     width="60" height="60" style="object-fit:cover;">
-            <?php else : ?>
-                -
-            <?php endif; ?>
-        </td>
+    <td>
+        <strong><?= htmlspecialchars($row['brand']); ?></strong>
+    </td>
 
-        <!-- รายละเอียด -->
-        <td>
-            <strong><?= htmlspecialchars($row['name']); ?></strong><br>
-            รุ่น: <?= htmlspecialchars($row['model'] ?? '-'); ?><br>
-            รหัสครุภัณฑ์: <?= htmlspecialchars($row['asset_code']); ?>
-        </td>
+    <td align="center">
+        <?= date('d/m/Y', strtotime($row['created_at'])); ?>
+    </td>
 
-        <!-- วันที่เพิ่ม -->
-        <td>
-            <?= date('d/m/Y', strtotime($row['created_at'])); ?>
-        </td>
+    <td align="center">
+        <?= (int)$row['available_qty']; ?> /
+        <?= (int)$row['total_qty']; ?> เครื่อง
+    </td>
 
-        <!-- จำนวน -->
-        <td align="center">
-            <?= (int)$row['available_qty']; ?> /
-            <?= (int)$row['total_qty']; ?>
-        </td>
+    <td align="right">
+        <?= number_format((float)$row['total_price'], 2); ?> บาท
+    </td>
 
-        <!-- สถานะ -->
-        <td align="center">
-            <?= equipmentStatus((int)$row['status']); ?>
-        </td>
+    <td align="center">
+        <a href="../equipments/index.php?type_id=<?= (int)$type_id; ?>&category_id=<?= (int)$row['brand_id']; ?>">
+            🔍 ดูรายละเอียด
+        </a>
+        |
+        <a href="../brand/edit.php?id=<?= (int)$row['brand_id']; ?>">
+            ✏️ แก้ไข
+        </a>
+    </td>
 
-        <!-- ราคา -->
-        <td align="right">
-            <?= number_format((float)$row['price'], 2); ?> บาท
-        </td>
-
-        <!-- จัดการ -->
-        <td align="center">
-            <a href="../equipments/edit.php?id=<?= $row['id']; ?>">✏️ แก้ไข</a>
-        </td>
-
-    </tr>
-    <?php endwhile; ?>
-
+</tr>
+<?php endwhile; ?>
 </table>
 
 </body>
